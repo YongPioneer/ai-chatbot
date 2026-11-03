@@ -10,6 +10,7 @@
 - **中英双语**：中文问中文答、英文询盘英文答，多语言向量模型 + 中文产品资料天然支持
 - **SSE 流式**：`/rag-stream` 打字机效果，首字 1 秒内可见
 - **Agent 工具调用（Function Calling）**：`/agent` 接口让 DeepSeek 自主决定调用 `queryProduct` / `findProductsByNeed` 工具查资料，支持报型号、报规格、英文询盘
+- **多轮对话记忆（持久化）**：`/chat-agent` 接口按 `conversationId` 管理会话，历史存 PostgreSQL（重启不丢），实现 Spring AI 原生 `ChatMemory` 接口
 - **资料热插拔**：`docs/` 放 PDF/Word/TXT/MD，重启自动增量入库（文件指纹驱动缓存/重建）
 
 ## 技术栈
@@ -21,8 +22,9 @@
 | 向量化 | TransformersEmbeddingModel（ONNX 多语言 MiniLM，384 维） |
 | 向量库 | PostgreSQL 17 + pgvector 0.8.7（COSINE_DISTANCE） |
 | Agent | Spring AI @Tool 函数调用（queryProduct / findProductsByNeed） |
+| 记忆 | Spring AI ChatMemory 接口 + PostgreSQL chat_history 表（持久化） |
 | PDF 解析 | PyMuPDF（`scripts/extract_pdf_pages.py`，失败回退 PDFBox） |
-| 输出 | REST `/rag` + SSE `/rag-stream` + Agent `/agent` |
+| 输出 | REST `/rag` + SSE `/rag-stream` + Agent `/agent` + 多轮 `/chat-agent` |
 
 ## 架构
 
@@ -84,6 +86,10 @@ curl -N "http://localhost:8080/rag-stream?msg=send%20me%20the%20parameters%20of%
 
 # Agent（模型自主调用工具查资料）
 curl "http://localhost:8080/agent?msg=PR360%E7%9A%84%E5%8F%82%E6%95%B0"
+
+# 多轮对话（第一次自动生成 conversationId，续聊带上同一个 ID）
+curl "http://localhost:8080/chat-agent?msg=PR360%E7%9A%84%E5%8F%82%E6%95%B0"
+curl "http://localhost:8080/chat-agent?conversationId=上一步返回的ID&msg=%E7%BA%BF%E5%9C%88%E7%94%B5%E5%8E%8B%E6%98%AF%E5%A4%9A%E5%B0%91"
 ```
 
 ### 喂新资料
@@ -95,10 +101,11 @@ curl "http://localhost:8080/agent?msg=PR360%E7%9A%84%E5%8F%82%E6%95%B0"
 ```
 ai-chatbot/
 ├─ src/main/java/com/example/aichatbot/
-│  ├─ RAGController.java     # /rag + /rag-stream + /agent 接口
+│  ├─ RAGController.java     # /rag + /rag-stream + /agent + /chat-agent 接口
 │  ├─ RAGConfig.java         # 向量模型、切块、知识库加载（缓存/重建）
 │  ├─ ProductSearchService.java  # 双通道检索（RAG/Agent 共用）
 │  ├─ SalesTools.java        # @Tool 工具：queryProduct / findProductsByNeed
+│  ├─ PersistentChatMemory.java  # 多轮记忆：ChatMemory 接口 + PG 持久化（课3）
 │  └─ AiChatbotApplication.java
 ├─ src/main/resources/
 │  ├─ application.yml        # 数据源 + 向量库 + 模型配置
@@ -112,6 +119,6 @@ ai-chatbot/
 ## 已知边界与优化方向
 
 - 表格列语义丢失：PDF 表格拆成裸数字行后列名丢失（下一步：表格结构化入库 `find_tables()`）
-- 单轮问答：暂无多轮记忆（下一步：Spring AI ChatMemory + PG 存储）
-- 无 Agent：暂不能自动写开发信/查库存（下一步：@Tool 函数调用）
+- 记忆上限：单会话历史限最近 20 条（够了，防止上下文爆炸）
+- 无自动跟单：暂不能自动写开发信/查库存（下一步：扩展 @Tool）
 - API Key 已环境变量化，可安全推 GitHub

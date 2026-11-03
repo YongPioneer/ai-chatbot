@@ -1,8 +1,14 @@
 package com.example.aichatbot;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.document.Document;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,9 +21,11 @@ import reactor.core.publisher.Flux;
  *
  * /rag  + /rag-stream   RAG问答（检索→拼接→回答，资料由服务端硬塞给模型）
  * /agent               Agent问答（课2：模型自己决定何时调用 queryProduct 工具查资料）
+ * /chat                Agent + 多轮记忆（课3：按 conversationId 持久化历史，重启不丢）
  *
  * 课2要点：ProductSearchService 抽成独立服务，RAG 和 Agent 共用同一套检索逻辑（单一职责）；
  *         Agent 版通过 ChatClient.tools(...) 把 @Tool 方法暴露给 DeepSeek。
+ * 课3要点：ChatMemory 接口（Spring AI 原生）+ PostgreSQL 持久化实现 PersistentChatMemory。
  */
 @RestController
 public class RAGController {
@@ -25,11 +33,14 @@ public class RAGController {
     private final ChatClient chatClient;
     private final ProductSearchService searchService;
     private final SalesTools salesTools;
+    private final ChatMemory chatMemory;
 
-    public RAGController(ChatClient.Builder builder, ProductSearchService searchService, SalesTools salesTools) {
+    public RAGController(ChatClient.Builder builder, ProductSearchService searchService,
+                         SalesTools salesTools, ChatMemory chatMemory) {
         this.chatClient = builder.build();
         this.searchService = searchService;
         this.salesTools = salesTools;
+        this.chatMemory = chatMemory;
     }
 
     private static final String SYSTEM_PROMPT = """
@@ -84,5 +95,44 @@ public class RAGController {
                 .user("【客户问题】" + msg)
                 .call()
                 .content();
+    }
+
+    // ---- 多轮对话（课3）：Agent + 持久化记忆 ----
+    // 用法：第一次不带 conversationId（自动生成），以后续聊带上同一个 conversationId
+    // 路径用 /chat-agent 而非 /chat（ChatController 已占用 /chat）
+    @GetMapping("/chat-agent")
+    public Map<String, Object> chat(@RequestParam String msg,
+                                    @RequestParam(required = false) String conversationId) {
+        String cid = (conversationId == null || conversationId.isBlank())
+                ? UUID.randomUUID().toString() : conversationId;
+        System.out.println("[聊天调试] 会话: " + cid + " 问题: " + msg);
+
+        // 1) 取该会话历史（从 PostgreSQL 读，重启不丢，内部限最近20条）
+        List<Message> history = chatMemory.get(cid);
+
+        // 2) 拼进提示词：历史 + 当前问题
+        StringBuilder userContent = new StringBuilder();
+        if (!history.isEmpty()) {
+            userContent.append("【历史对话】（同一客户之前的沟通，回答时注意衔接，不要重复已说过的话）\n");
+            for (Message m : history) {
+                String role = m instanceof UserMessage ? "客户" : "你";
+                userContent.append(role).append(": ").append(m.getText()).append('\n');
+            }
+            userContent.append('\n');
+        }
+        userContent.append("【客户问题】").append(msg);
+
+        // 3) 调用模型（带工具 + 历史上下文）
+        String answer = chatClient.prompt()
+                .system(AGENT_SYSTEM_PROMPT)
+                .tools(salesTools)
+                .user(userContent.toString())
+                .call()
+                .content();
+
+        // 4) 把本轮问答写回数据库
+        chatMemory.add(cid, List.of(new UserMessage(msg), new AssistantMessage(answer)));
+
+        return Map.of("conversationId", cid, "answer", answer);
     }
 }
