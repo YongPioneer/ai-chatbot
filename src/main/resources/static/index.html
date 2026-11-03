@@ -3,154 +3,231 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>外贸销售助手 · RAG 流式版</title>
+<title>AI外贸销售助手</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
   body {
-    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-    background: #f0f2f5;
-    display: flex; justify-content: center;
-    padding: 24px 12px; min-height: 100vh;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, #f0f4ff 0%, #f8fafc 100%);
+    display: flex; justify-content: center; align-items: center;
+    padding: 16px;
   }
   .app {
-    width: 100%; max-width: 760px;
-    background: #fff; border-radius: 14px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    display: flex; flex-direction: column;
-    height: calc(100vh - 48px);
+    width: 100%; max-width: 780px; height: min(88vh, 860px);
+    background: #fff; border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(30, 60, 120, 0.12);
+    display: flex; flex-direction: column; overflow: hidden;
   }
   .header {
-    padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
-    display: flex; align-items: center; gap: 10px;
+    padding: 14px 20px; border-bottom: 1px solid #eef0f4;
+    display: flex; align-items: center; gap: 10px; background: #fff;
   }
-  .header h1 { font-size: 17px; color: #1f2937; font-weight: 600; }
+  .header .logo {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, #4f6ef7, #6a8cff);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 17px; font-weight: 700;
+  }
+  .header h1 { font-size: 16px; color: #1f2937; font-weight: 600; }
+  .header .sub { font-size: 11px; color: #9ca3af; margin-top: 1px; }
   .header .badge {
-    background: #eef2ff; color: #4f46e5; font-size: 11px;
-    padding: 3px 8px; border-radius: 99px; font-weight: 500;
+    margin-left: auto; background: #ecfdf5; color: #059669; font-size: 11px;
+    padding: 3px 10px; border-radius: 99px; font-weight: 500; white-space: nowrap;
   }
-  .header .hint { margin-left: auto; font-size: 12px; color: #9ca3af; }
   .chat {
-    flex: 1; overflow-y: auto; padding: 18px 20px;
-    display: flex; flex-direction: column; gap: 14px;
+    flex: 1; overflow-y: auto; padding: 18px 16px;
+    display: flex; flex-direction: column; gap: 12px;
+    background: #fafbfd;
   }
-  .row { display: flex; }
-  .row.user { justify-content: flex-end; }
+  .row { display: flex; gap: 8px; max-width: 88%; }
+  .row.user { align-self: flex-end; flex-direction: row-reverse; }
   .bubble {
-    max-width: 82%; padding: 10px 14px; border-radius: 12px;
-    font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+    padding: 10px 14px; border-radius: 14px; line-height: 1.6;
+    font-size: 14px; word-break: break-word; white-space: pre-wrap;
   }
-  .row.user .bubble { background: #4f46e5; color: #fff; border-top-right-radius: 4px; }
-  .row.ai .bubble { background: #f3f4f6; color: #1f2937; border-top-left-radius: 4px; }
-  .row.ai .bubble.streaming::after {
-    content: "▋"; color: #4f46e5; animation: blink 1s infinite;
+  .row.bot .bubble {
+    background: #fff; border: 1px solid #e8ecf3; color: #1f2937;
+    border-top-left-radius: 4px;
   }
+  .row.user .bubble {
+    background: linear-gradient(135deg, #4f6ef7, #5b7cfa); color: #fff;
+    border-top-right-radius: 4px;
+  }
+  .row .avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .row.bot .avatar { background: #eef2ff; }
+  .row.user .avatar { background: #4f6ef7; }
+  .bubble table { border-collapse: collapse; margin: 6px 0; }
+  .bubble td, .bubble th {
+    border: 1px solid #dde3ec; padding: 4px 8px; font-size: 13px;
+  }
+  .bubble th { background: #f6f8fb; }
+  .cursor { display: inline-block; width: 8px; height: 16px; background: #6a8cff;
+    vertical-align: -2px; animation: blink 1s infinite; border-radius: 2px; }
   @keyframes blink { 50% { opacity: 0; } }
-  .inputbar {
-    padding: 14px 16px; border-top: 1px solid #e5e7eb;
-    display: flex; gap: 10px;
+  .typing { color: #9ca3af; font-size: 13px; }
+  .footer { padding: 12px 16px; border-top: 1px solid #eef0f4; background: #fff;
+    display: flex; gap: 8px; align-items: flex-end; }
+  #input {
+    flex: 1; border: 1px solid #dde3ec; border-radius: 12px; padding: 10px 14px;
+    font-size: 14px; outline: none; resize: none; font-family: inherit;
+    max-height: 120px; background: #fafbfd; color: #1f2937;
   }
-  .inputbar input {
-    flex: 1; padding: 10px 14px; border: 1px solid #d1d5db;
-    border-radius: 10px; font-size: 14px; outline: none;
+  #input:focus { border-color: #4f6ef7; background: #fff; }
+  .btn {
+    border: none; border-radius: 12px; padding: 10px 18px; font-size: 14px;
+    cursor: pointer; font-weight: 500; transition: opacity .15s;
   }
-  .inputbar input:focus { border-color: #4f46e5; }
-  .inputbar button {
-    padding: 10px 22px; border: none; border-radius: 10px;
-    background: #4f46e5; color: #fff; font-size: 14px; cursor: pointer;
+  #sendBtn { background: linear-gradient(135deg, #4f6ef7, #5b7cfa); color: #fff; }
+  #sendBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #newBtn { background: #f1f3f8; color: #6b7280; }
+  .hint { font-size: 11px; color: #b3bac5; text-align: center; padding: 6px 0 2px; }
+  @media (max-width: 480px) {
+    body { padding: 0; }
+    .app { height: 100vh; border-radius: 0; }
+    .row { max-width: 94%; }
   }
-  .inputbar button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .tips { padding: 8px 20px 14px; font-size: 12px; color: #9ca3af; line-height: 1.8; }
-  .tips b { color: #6b7280; }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="header">
-    <h1>外贸销售助手</h1>
-    <span class="badge">RAG 流式版</span>
-    <span class="hint" id="status">就绪</span>
+    <div class="logo">贸</div>
+    <div>
+      <h1>AI 外贸销售助手</h1>
+      <div class="sub">继电器 · 接触器 · 隔离开关 · 浪涌保护器</div>
+    </div>
+    <span class="badge" id="memBadge">● 多轮记忆已开启</span>
   </div>
+
   <div class="chat" id="chat"></div>
-  <div class="inputbar">
-    <input id="msg" placeholder="用中文或英文问产品参数，例如：PR360的参数发我看看 / What is the FLA of SA contactors?" autofocus>
-    <button id="send">发送</button>
+
+  <div class="footer">
+    <textarea id="input" rows="1" placeholder="例：PR360的参数 / 24V线圈 SPST-NO 充电桩用继电器 / send me the specs of SA-3P"></textarea>
+    <button class="btn" id="sendBtn">发送</button>
+    <button class="btn" id="newBtn" title="开始新会话">新会话</button>
   </div>
-  <div class="tips">
-    <b>提示：</b>资料是英文产品目录，多语言模型已支持中英文提问；问具体型号请用完整型号（如 PR360、SA-3P、HCDP-2P）。
-  </div>
+  <div class="hint">会话自动保存，刷新/重启后依然记得上次聊了什么 · Enter 发送 / Shift+Enter 换行</div>
 </div>
 
 <script>
-const chat = document.getElementById('chat');
-const input = document.getElementById('msg');
-const sendBtn = document.getElementById('send');
-const status = document.getElementById('status');
+(function () {
+  var KEY = 'ai_trade_cid';
+  var chat = document.getElementById('chat');
+  var input = document.getElementById('input');
+  var sendBtn = document.getElementById('sendBtn');
+  var newBtn = document.getElementById('newBtn');
+  var streaming = false;
 
-function addRow(role) {
-  const row = document.createElement('div');
-  row.className = 'row ' + role;
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  if (role === 'ai') bubble.classList.add('streaming');
-  row.appendChild(bubble);
-  chat.appendChild(row);
-  chat.scrollTop = chat.scrollHeight;
-  return bubble;
-}
+  function esc(s) { return s; } // 统一用 textContent，无需转义
 
-async function ask(q) {
-  const userBubble = addRow('user');
-  userBubble.textContent = q;
-  const aiBubble = addRow('ai');
-  status.textContent = 'AI 生成中…';
-  sendBtn.disabled = true;
-  input.disabled = true;
-  try {
-    const res = await fetch('/rag-stream?msg=' + encodeURIComponent(q));
-    if (!res.ok || !res.body) throw new Error('请求失败 ' + res.status);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf('\n\n')) >= 0) {
-        const event = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        const dataLine = event.split('\n').find(function (l) { return l.startsWith('data:'); });
-        if (dataLine) {
-          const text = dataLine.slice(5).trim();
-          if (text) {
-            aiBubble.textContent += text;
-            chat.scrollTop = chat.scrollHeight;
-          }
-        }
+  function addMsg(role, text) {
+    var row = document.createElement('div');
+    row.className = 'row ' + role;
+    var avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? '客' : 'AI';
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    chat.appendChild(row);
+    chat.scrollTop = chat.scrollHeight;
+    return bubble;
+  }
+
+  function getCid() {
+    try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; }
+  }
+  function setCid(cid) {
+    try { localStorage.setItem(KEY, cid); } catch (e) {}
+  }
+
+  function welcome() {
+    var b = addMsg('bot', '您好！我是您的 AI 外贸销售助手 🤝\n\n我可以帮您：\n' +
+      '· 查型号参数：报型号即可（如 PR360、SA-3P、PR 系列）\n' +
+      '· 按规格推荐：描述用途或规格（如 24V 线圈、SPST-NO、充电桩用）\n' +
+      '· 英文询盘：直接发英文（I need specs of...）\n\n' +
+      '多轮记忆已开启——我会记住本次会话聊过的内容，刷新页面也不会忘。');
+  }
+
+  function send() {
+    if (streaming) return;
+    var msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    input.style.height = 'auto';
+    addMsg('user', msg);
+
+    var bubble = addMsg('bot', '');
+    bubble.innerHTML = '<span class="typing">正在查询产品资料…</span>';
+    streaming = true;
+    sendBtn.disabled = true;
+
+    var url = '/chat-agent-stream?msg=' + encodeURIComponent(msg);
+    var cid = getCid();
+    if (cid) url += '&conversationId=' + encodeURIComponent(cid);
+
+    var es = new EventSource(url);
+    var done = false;
+
+    function finish() {
+      if (done) return;
+      done = true;
+      streaming = false;
+      sendBtn.disabled = false;
+      input.focus();
+      if (es) es.close();
+      if (!bubble.textContent.trim()) {
+        bubble.textContent = '（抱歉，这次没有收到回答，请重试）';
       }
     }
-    aiBubble.classList.remove('streaming');
-    status.textContent = '完成';
-  } catch (e) {
-    aiBubble.textContent = '⚠ 出错了：' + e.message;
-    aiBubble.classList.remove('streaming');
-    status.textContent = '出错';
-  } finally {
-    sendBtn.disabled = false;
-    input.disabled = false;
-    input.focus();
-  }
-}
 
-sendBtn.addEventListener('click', function () {
-  const q = input.value.trim();
-  if (!q) return;
-  input.value = '';
-  ask(q);
-});
-input.addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') sendBtn.click();
-});
+    es.addEventListener('meta', function (e) {
+      try { setCid(JSON.parse(e.data).conversationId); } catch (err) {}
+    });
+
+    es.addEventListener('message', function (e) {
+      if (bubble.querySelector('.typing')) bubble.innerHTML = '';
+      bubble.textContent += e.data;
+      chat.scrollTop = chat.scrollHeight;
+    });
+
+    es.onerror = function () { finish(); };
+    es.onopen = function () {
+      if (bubble.querySelector('.typing')) bubble.innerHTML = '';
+      var cur = document.createElement('span');
+      cur.className = 'cursor';
+      bubble.appendChild(cur);
+    };
+    // EventSource 默认不会因正常结束触发 onopen 的清除，这里在 readyState 为 2 时收尾
+    var t = setInterval(function () {
+      if (es.readyState === 2) { clearInterval(t); finish(); }
+    }, 500);
+  }
+
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  input.addEventListener('input', function () {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+  sendBtn.addEventListener('click', send);
+
+  newBtn.addEventListener('click', function () {
+    if (streaming) return;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    chat.innerHTML = '';
+    welcome();
+  });
+
+  welcome();
+})();
 </script>
 </body>
 </html>

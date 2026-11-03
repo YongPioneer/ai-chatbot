@@ -11,6 +11,7 @@
 - **SSE 流式**：`/rag-stream` 打字机效果，首字 1 秒内可见
 - **Agent 工具调用（Function Calling）**：`/agent` 接口让 DeepSeek 自主决定调用 `queryProduct` / `findProductsByNeed` 工具查资料，支持报型号、报规格、英文询盘
 - **多轮对话记忆（持久化）**：`/chat-agent` 接口按 `conversationId` 管理会话，历史存 PostgreSQL（重启不丢），实现 Spring AI 原生 `ChatMemory` 接口
+- **开箱即用的聊天页面**：打开 `http://localhost:8080/` 即用，会话 ID 自动存浏览器（localStorage），刷新/重启不丢，SSE 流式打字机，支持中英双语
 - **资料热插拔**：`docs/` 放 PDF/Word/TXT/MD，重启自动增量入库（文件指纹驱动缓存/重建）
 
 ## 技术栈
@@ -24,7 +25,7 @@
 | Agent | Spring AI @Tool 函数调用（queryProduct / findProductsByNeed） |
 | 记忆 | Spring AI ChatMemory 接口 + PostgreSQL chat_history 表（持久化） |
 | PDF 解析 | PyMuPDF（`scripts/extract_pdf_pages.py`，失败回退 PDFBox） |
-| 输出 | REST `/rag` + SSE `/rag-stream` + Agent `/agent` + 多轮 `/chat-agent` |
+| 输出 | REST `/rag` + SSE `/rag-stream` + Agent `/agent` + 多轮 `/chat-agent` + 流式 `/chat-agent-stream` + 页面 `/` |
 
 ## 架构
 
@@ -78,6 +79,9 @@ IDEA 中设置：`Run/Debug Configurations → Environment variables` 填 `ARK_A
 ### 试用
 
 ```bash
+# 最省事：打开浏览器直接用（聊天页面，会话自动保存）
+#  http://localhost:8080/
+
 # 普通问答
 curl "http://localhost:8080/rag?msg=PR360%E7%9A%84%E5%8F%82%E6%95%B0"
 

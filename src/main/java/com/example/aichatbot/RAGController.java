@@ -11,6 +11,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.document.Document;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -134,5 +135,48 @@ public class RAGController {
         chatMemory.add(cid, List.of(new UserMessage(msg), new AssistantMessage(answer)));
 
         return Map.of("conversationId", cid, "answer", answer);
+    }
+
+    // ---- 多轮对话流式（页面用）：SSE + 自动生成/携带 conversationId ----
+    // 首条事件 event=meta 携带 conversationId（新会话时生成，页面存浏览器）；
+    // 之后 event=message 逐字返回回答；回答结束后自动写回数据库。
+    @GetMapping(value = "/chat-agent-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> chatAgentStream(@RequestParam String msg,
+                                                         @RequestParam(required = false) String conversationId) {
+        String cid = (conversationId == null || conversationId.isBlank())
+                ? UUID.randomUUID().toString() : conversationId;
+        System.out.println("[聊天流式调试] 会话: " + cid + " 问题: " + msg);
+
+        // 1) 取历史 + 拼提示词（与 /chat-agent 相同逻辑）
+        List<Message> history = chatMemory.get(cid);
+        StringBuilder userContent = new StringBuilder();
+        if (!history.isEmpty()) {
+            userContent.append("【历史对话】（同一客户之前的沟通，回答时注意衔接，不要重复已说过的话）\n");
+            for (Message m : history) {
+                String role = m instanceof UserMessage ? "客户" : "你";
+                userContent.append(role).append(": ").append(m.getText()).append('\n');
+            }
+            userContent.append('\n');
+        }
+        userContent.append("【客户问题】").append(msg);
+
+        // 2) 流式调用模型（带工具 + 历史），边返回边累积完整回答
+        StringBuilder answerBuf = new StringBuilder();
+        Flux<String> content = chatClient.prompt()
+                .system(AGENT_SYSTEM_PROMPT)
+                .tools(salesTools)
+                .user(userContent.toString())
+                .stream()
+                .content()
+                .doOnNext(answerBuf::append);
+
+        // 3) 首条发 meta（conversationId），随后逐字发 message，结束后写库
+        return Flux.concat(
+                Flux.just(ServerSentEvent.<String>builder(cid).event("meta").build()),
+                content.map(token -> ServerSentEvent.<String>builder(token).event("message").build())
+        ).doOnComplete(() -> {
+            chatMemory.add(cid, List.of(new UserMessage(msg), new AssistantMessage(answerBuf.toString())));
+            System.out.println("[聊天流式调试] 已写库: " + cid);
+        });
     }
 }
