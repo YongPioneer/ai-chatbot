@@ -1,0 +1,33 @@
+# =============================================
+# Company Product Profile - for the Sales Assistant
+# HOW TO USE: edit & save -> restart the app -> assistant uses new data
+# NOTE: replace the 【】placeholders with your REAL data
+# =============================================
+
+## Product Lines
+- AC Contactor: UL-listed, 9A~630A, 1~4 poles, AC/DC coil
+- DP Contactor: UL-listed, designed for HVAC equipment start/stop control
+- Relay: multiple specifications, UL certified
+- Disconnect Switch: UL-listed, 2~4 poles
+- Surge Protector: multiple levels available
+
+## Certifications
+- UL / CSA / CE
+
+## General Business Terms
+- MOQ: 500 pcs for standard models (negotiable per model)
+- Samples: available; sample fee + shipping paid by customer, refunded on bulk order
+- Lead Time: 15~25 days for standard models
+- Payment: T/T (30% deposit + 70% before shipment) or L/C
+- Warranty: 12 months
+
+## Common Models (IMPORTANT: replace with your real models)
+- Model:【AC-25】 Spec:【25A 2-pole】 Cert:【UL】 MOQ:【500】
+- Model:【AC-40】 Spec:【40A 3-pole】 Cert:【UL】 MOQ:【500】
+- Model:【DP-30】 Spec:【30A 2-pole】 Cert:【UL】 MOQ:【1000】
+
+## Factory Info
+- Factory Type:【OEM/ODM manufacturer】
+- Annual Capacity:【500,000 units】
+- Main Markets:【North America / Europe / Middle East】
+- Typical Customers:【HVAC distributors, equipment manufacturers】

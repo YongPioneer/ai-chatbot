@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>外贸销售助手 · RAG 流式版</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #f0f2f5;
+    display: flex; justify-content: center;
+    padding: 24px 12px; min-height: 100vh;
+  }
+  .app {
+    width: 100%; max-width: 760px;
+    background: #fff; border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column;
+    height: calc(100vh - 48px);
+  }
+  .header {
+    padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .header h1 { font-size: 17px; color: #1f2937; font-weight: 600; }
+  .header .badge {
+    background: #eef2ff; color: #4f46e5; font-size: 11px;
+    padding: 3px 8px; border-radius: 99px; font-weight: 500;
+  }
+  .header .hint { margin-left: auto; font-size: 12px; color: #9ca3af; }
+  .chat {
+    flex: 1; overflow-y: auto; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .row { display: flex; }
+  .row.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 82%; padding: 10px 14px; border-radius: 12px;
+    font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+  }
+  .row.user .bubble { background: #4f46e5; color: #fff; border-top-right-radius: 4px; }
+  .row.ai .bubble { background: #f3f4f6; color: #1f2937; border-top-left-radius: 4px; }
+  .row.ai .bubble.streaming::after {
+    content: "▋"; color: #4f46e5; animation: blink 1s infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .inputbar {
+    padding: 14px 16px; border-top: 1px solid #e5e7eb;
+    display: flex; gap: 10px;
+  }
+  .inputbar input {
+    flex: 1; padding: 10px 14px; border: 1px solid #d1d5db;
+    border-radius: 10px; font-size: 14px; outline: none;
+  }
+  .inputbar input:focus { border-color: #4f46e5; }
+  .inputbar button {
+    padding: 10px 22px; border: none; border-radius: 10px;
+    background: #4f46e5; color: #fff; font-size: 14px; cursor: pointer;
+  }
+  .inputbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tips { padding: 8px 20px 14px; font-size: 12px; color: #9ca3af; line-height: 1.8; }
+  .tips b { color: #6b7280; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>外贸销售助手</h1>
+    <span class="badge">RAG 流式版</span>
+    <span class="hint" id="status">就绪</span>
+  </div>
+  <div class="chat" id="chat"></div>
+  <div class="inputbar">
+    <input id="msg" placeholder="用中文或英文问产品参数，例如：PR360的参数发我看看 / What is the FLA of SA contactors?" autofocus>
+    <button id="send">发送</button>
+  </div>
+  <div class="tips">
+    <b>提示：</b>资料是英文产品目录，多语言模型已支持中英文提问；问具体型号请用完整型号（如 PR360、SA-3P、HCDP-2P）。
+  </div>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const input = document.getElementById('msg');
+const sendBtn = document.getElementById('send');
+const status = document.getElementById('status');
+
+function addRow(role) {
+  const row = document.createElement('div');
+  row.className = 'row ' + role;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  if (role === 'ai') bubble.classList.add('streaming');
+  row.appendChild(bubble);
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+  return bubble;
+}
+
+async function ask(q) {
+  const userBubble = addRow('user');
+  userBubble.textContent = q;
+  const aiBubble = addRow('ai');
+  status.textContent = 'AI 生成中…';
+  sendBtn.disabled = true;
+  input.disabled = true;
+  try {
+    const res = await fetch('/rag-stream?msg=' + encodeURIComponent(q));
+    if (!res.ok || !res.body) throw new Error('请求失败 ' + res.status);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) >= 0) {
+        const event = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const dataLine = event.split('\n').find(function (l) { return l.startsWith('data:'); });
+        if (dataLine) {
+          const text = dataLine.slice(5).trim();
+          if (text) {
+            aiBubble.textContent += text;
+            chat.scrollTop = chat.scrollHeight;
+          }
+        }
+      }
+    }
+    aiBubble.classList.remove('streaming');
+    status.textContent = '完成';
+  } catch (e) {
+    aiBubble.textContent = '⚠ 出错了：' + e.message;
+    aiBubble.classList.remove('streaming');
+    status.textContent = '出错';
+  } finally {
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+sendBtn.addEventListener('click', function () {
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  ask(q);
+});
+input.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') sendBtn.click();
+});
+</script>
+</body>
+</html>

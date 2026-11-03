@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: ai-chatbot
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ai_chatbot
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+  ai:
+    openai:
+      base-url: https://ark.cn-beijing.volces.com/api/v3
+      api-key: ${ARK_API_KEY}
+      chat:
+        options:
+          model: deepseek-v4-flash-ga-260731
+          temperature: 0.7
+      embedding:
+        enabled: false   # 禁用云端embedding（RAG改用本地ONNX模型，零成本）
+    vectorstore:
+      pgvector:
+        table-name: vector_store
+        dimensions: 384        # 必须匹配本地 ONNX 模型的向量维度（paraphrase-multilingual-MiniLM-L12-v2 是 384 维）
+        distance-type: COSINE_DISTANCE
+        initialize-schema: true   # 启动自动建表（需数据库已启用 vector 扩展）
+
+server:
+  port: 8080
